@@ -1,0 +1,14 @@
+# Toolchain / SDK fetched by CI, not committed
+tools/
+MacKernelSDK/
+build/
+# Built binaries (CI produces the real ones)
+HonorFB.kext/Contents/MacOS/
+efi-variants/*/EFI/OC/Kexts/*/Contents/MacOS/
+# Large / transient
+*.zip
+*.7z
+*.dmg
+*.img
+*.vmdk
+*.vhd

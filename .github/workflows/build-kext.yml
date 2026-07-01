@@ -1,0 +1,52 @@
+name: build-HonorFB-kext
+
+# Builds HonorFB.kext on a real macOS runner (real Apple ld64 = supports -kext, which
+# ld64.lld does NOT). This is the reliable "no local macOS" build path: push this repo,
+# GitHub compiles the kext, download the artifact. No Apple ID needed (MacKernelSDK is public).
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch MacKernelSDK (kernel headers + libkmod)
+        run: git clone --depth 1 https://github.com/acidanthera/MacKernelSDK
+
+      - name: Compile
+        run: |
+          set -euxo pipefail
+          mkdir -p build
+          COMMON="-target x86_64-apple-macos11 -DKERNEL -DKERNEL_PRIVATE -DDRIVER_PRIVATE -DAPPLE -DNeXT -nostdinc -fno-builtin -fno-common -mkernel -I MacKernelSDK/Headers -Wall -Wextra"
+          clang -c src/kmod_info.c -o build/kmod_info.o $COMMON
+          clang++ -c src/HonorFB.cpp -o build/HonorFB.o -std=c++17 -x c++ -fapple-kext -fno-rtti -fno-exceptions -fcheck-new -fno-threadsafe-statics $COMMON
+
+      - name: Link (MH_KEXT_BUNDLE)
+        run: |
+          set -euxo pipefail
+          clang++ -o build/HonorFB \
+            -arch x86_64 -nostdlib -static \
+            -Xlinker -kext -Xlinker -export_dynamic \
+            build/HonorFB.o build/kmod_info.o \
+            -L MacKernelSDK/Library/universal -lkmod -lkmodc++ -lcc_kext
+          echo "--- filetype (must be KEXT_BUNDLE) ---"
+          otool -h build/HonorFB
+
+      - name: Assemble bundle
+        run: |
+          set -euxo pipefail
+          mkdir -p out/HonorFB.kext/Contents/MacOS
+          cp HonorFB.kext/Contents/Info.plist out/HonorFB.kext/Contents/Info.plist
+          cp build/HonorFB out/HonorFB.kext/Contents/MacOS/HonorFB
+          chmod -R 755 out/HonorFB.kext
+
+      - name: Upload HonorFB.kext
+        uses: actions/upload-artifact@v4
+        with:
+          name: HonorFB.kext
+          path: out/HonorFB.kext
