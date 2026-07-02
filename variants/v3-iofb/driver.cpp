@@ -52,8 +52,6 @@ public:
     virtual IOReturn  connectFlags(IOIndex connectIndex, IODisplayModeID displayMode,
                                    IOOptionBits *flags) override;
     virtual bool      hasDDCConnect(IOIndex connectIndex) override;
-    virtual IOReturn  getAttribute(IOSelect attribute, uintptr_t *value) override;
-    virtual IOReturn  setAttribute(IOSelect attribute, uintptr_t value) override;
 };
 
 OSDefineMetaClassAndStructors(HonorFB_v3, IOFramebuffer)
@@ -160,7 +158,7 @@ IOReturn HonorFB_v3::setDisplayMode(IODisplayModeID displayMode, IOIndex depth)
 IOReturn HonorFB_v3::getAttributeForConnection(IOIndex, IOSelect attribute, uintptr_t *value)
 {
     switch (attribute) {
-        case kConnectionEnableAttribute:            // display is enabled
+        case kConnectionEnable:                     // display is enabled
         case kConnectionCheckEnable:                // ...and present
             if (value) *value = 1;
             return kIOReturnSuccess;
@@ -199,14 +197,3 @@ IOReturn HonorFB_v3::connectFlags(IOIndex, IODisplayModeID displayMode, IOOption
 }
 
 bool HonorFB_v3::hasDDCConnect(IOIndex) { return false; }   // fixed panel, no DDC/EDID
-
-IOReturn HonorFB_v3::getAttribute(IOSelect attribute, uintptr_t *value)
-{
-    if (attribute == kIOFBSpeedAttribute) { if (value) *value = 0; return kIOReturnSuccess; }
-    return IOFramebuffer::getAttribute(attribute, value);
-}
-
-IOReturn HonorFB_v3::setAttribute(IOSelect attribute, uintptr_t value)
-{
-    return IOFramebuffer::setAttribute(attribute, value);
-}
