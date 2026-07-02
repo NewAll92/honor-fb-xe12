@@ -20,6 +20,7 @@ jobs:
           - v1-devicetree
           - v2-ioresources
           - vdiag-panic
+          - vpaint-probe
     steps:
       - name: Checkout
         uses: actions/checkout@v4
