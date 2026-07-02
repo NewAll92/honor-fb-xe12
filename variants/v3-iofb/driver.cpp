@@ -1,16 +1,13 @@
 //
-//  HonorFB v3 — direct IOFramebuffer subclass.
+//  HonorFB v3 — direct IOFramebuffer subclass (with display-connection reporting).
 //
-//  v0/v1/v2 publish a "display" nub and rely on Apple's IONDRVFramebuffer binding to it.
-//  On modern macOS (Metal-era WindowServer) that binding does not yield a usable display
-//  (boot reaches the WindowServer hand-off and stays on the verbose console). This variant
-//  removes that dependency: it IS the IOFramebuffer that CoreDisplay/WindowServer talk to.
-//  It scans out the boot GOP framebuffer recorded in PE_state.video (proven writable — the
-//  vpaint probe painted the internal panel), exposing exactly one mode = the boot
-//  resolution, 32-bit direct pixels, no acceleration.
+//  v0/v1/v2 delegate to IONDRVFramebuffer and never yield a GUI. v3 IS the IOFramebuffer
+//  CoreDisplay/WindowServer talk to, scanning out the boot GOP framebuffer (PE_state.video,
+//  proven writable by the vpaint probe). Crucially it also reports a *connected, enabled
+//  display* (getAttributeForConnection / connectFlags), which is what WindowServer needs to
+//  actually create a display and draw on the framebuffer — VM framebuffers do exactly this.
 //
-//  Matching (Info.plist): IOProviderClass = IOResources so start() always runs; it needs
-//  com.apple.iokit.IOGraphicsFamily in OSBundleLibraries (IOFramebuffer lives there).
+//  Matching (Info.plist): IOProviderClass = IOResources; needs IOGraphicsFamily in libs.
 //
 #include <IOKit/graphics/IOFramebuffer.h>
 #include <IOKit/graphics/IOGraphicsTypes.h>
@@ -27,6 +24,8 @@ public:
     IOPhysicalAddress64 fbPhys;
     IOByteCount         fbLen;
     uint32_t            fbW, fbH, fbRowBytes;
+    IODisplayModeID     currentMode;
+    IOIndex             currentDepth;
 
     virtual bool      start(IOService *provider) override;
     virtual IOReturn  enableController() override;
@@ -43,48 +42,52 @@ public:
                                           IOPixelInformation *pixelInfo) override;
     virtual IOReturn  getCurrentDisplayMode(IODisplayModeID *displayMode,
                                             IOIndex *depth) override;
+    virtual IOReturn  setDisplayMode(IODisplayModeID displayMode, IOIndex depth) override;
+
+    // --- display connection reporting (the piece WindowServer needs) ---
+    virtual IOReturn  getAttributeForConnection(IOIndex connectIndex, IOSelect attribute,
+                                                uintptr_t *value) override;
+    virtual IOReturn  setAttributeForConnection(IOIndex connectIndex, IOSelect attribute,
+                                                uintptr_t value) override;
+    virtual IOReturn  connectFlags(IOIndex connectIndex, IODisplayModeID displayMode,
+                                   IOOptionBits *flags) override;
+    virtual bool      hasDDCConnect(IOIndex connectIndex) override;
+    virtual IOReturn  getAttribute(IOSelect attribute, uintptr_t *value) override;
+    virtual IOReturn  setAttribute(IOSelect attribute, uintptr_t value) override;
 };
 
 OSDefineMetaClassAndStructors(HonorFB_v3, IOFramebuffer)
 
 bool HonorFB_v3::start(IOService *provider)
 {
-    if (!PE_state.initialized) {
-        IOLog("HonorFB_v3: PE_state not initialized\n");
-        return false;
-    }
+    if (!PE_state.initialized) { IOLog("HonorFB_v3: PE_state not init\n"); return false; }
     fbPhys     = static_cast<IOPhysicalAddress64>(PE_state.video.v_baseAddr & ~3ULL);
     fbW        = static_cast<uint32_t>(PE_state.video.v_width);
     fbH        = static_cast<uint32_t>(PE_state.video.v_height);
     fbRowBytes = static_cast<uint32_t>(PE_state.video.v_rowBytes);
     fbLen      = static_cast<IOByteCount>(static_cast<uint64_t>(fbH) * fbRowBytes);
+    currentMode  = kHonorModeID;
+    currentDepth = 0;
 
     IOLog("HonorFB_v3: fb=0x%llx %ux%u rowBytes=%u len=0x%llx\n",
           static_cast<unsigned long long>(fbPhys), fbW, fbH, fbRowBytes,
           static_cast<unsigned long long>(fbLen));
 
     if (fbPhys == 0 || fbLen == 0 || fbW == 0 || fbH == 0) {
-        IOLog("HonorFB_v3: invalid boot framebuffer\n");
-        return false;
+        IOLog("HonorFB_v3: invalid boot framebuffer\n"); return false;
     }
-
     if (!IOFramebuffer::start(provider)) {
-        IOLog("HonorFB_v3: IOFramebuffer::start failed\n");
-        return false;
+        IOLog("HonorFB_v3: IOFramebuffer::start failed\n"); return false;
     }
-    IOLog("HonorFB_v3: IOFramebuffer::start OK\n");
+    IOLog("HonorFB_v3: IOFramebuffer::start OK — display connected\n");
     return true;
 }
 
-IOReturn HonorFB_v3::enableController()
-{
-    return kIOReturnSuccess;
-}
+IOReturn HonorFB_v3::enableController() { return kIOReturnSuccess; }
 
 IODeviceMemory * HonorFB_v3::getApertureRange(IOPixelAperture aperture)
 {
-    if (aperture != kIOFBSystemAperture)
-        return nullptr;
+    if (aperture != kIOFBSystemAperture) return nullptr;
     return IODeviceMemory::withRange(fbPhys, fbLen);
 }
 
@@ -94,15 +97,11 @@ const char * HonorFB_v3::getPixelFormats()
     return pf;
 }
 
-IOItemCount HonorFB_v3::getDisplayModeCount()
-{
-    return 1;
-}
+IOItemCount HonorFB_v3::getDisplayModeCount() { return 1; }
 
 IOReturn HonorFB_v3::getDisplayModes(IODisplayModeID *allDisplayModes)
 {
-    if (!allDisplayModes)
-        return kIOReturnBadArgument;
+    if (!allDisplayModes) return kIOReturnBadArgument;
     allDisplayModes[0] = kHonorModeID;
     return kIOReturnSuccess;
 }
@@ -110,49 +109,104 @@ IOReturn HonorFB_v3::getDisplayModes(IODisplayModeID *allDisplayModes)
 IOReturn HonorFB_v3::getInformationForDisplayMode(IODisplayModeID displayMode,
                                                   IODisplayModeInformation *info)
 {
-    if (displayMode != kHonorModeID || !info)
-        return kIOReturnBadArgument;
+    if (displayMode != kHonorModeID || !info) return kIOReturnBadArgument;
     bzero(info, sizeof(*info));
     info->nominalWidth  = fbW;
     info->nominalHeight = fbH;
-    info->refreshRate   = 60 << 16;   // 60 Hz, 16.16 fixed
+    info->refreshRate   = 60 << 16;
     info->maxDepthIndex = 0;
+    info->flags         = kDisplayModeValidFlag | kDisplayModeSafeFlag |
+                          kDisplayModeDefaultFlag;
     return kIOReturnSuccess;
 }
 
-UInt64 HonorFB_v3::getPixelFormatsForDisplayMode(IODisplayModeID /*displayMode*/,
-                                                 IOIndex /*depth*/)
-{
-    return 0;   // deprecated, must return 0
-}
+UInt64 HonorFB_v3::getPixelFormatsForDisplayMode(IODisplayModeID, IOIndex) { return 0; }
 
 IOReturn HonorFB_v3::getPixelInformation(IODisplayModeID displayMode, IOIndex depth,
                                          IOPixelAperture aperture,
                                          IOPixelInformation *pixelInfo)
 {
     if (displayMode != kHonorModeID || depth != 0 ||
-        aperture != kIOFBSystemAperture || !pixelInfo)
-        return kIOReturnBadArgument;
-
+        aperture != kIOFBSystemAperture || !pixelInfo) return kIOReturnBadArgument;
     bzero(pixelInfo, sizeof(*pixelInfo));
     pixelInfo->bytesPerRow       = fbRowBytes;
-    pixelInfo->bytesPerPlane     = 0;
     pixelInfo->activeWidth       = fbW;
     pixelInfo->activeHeight      = fbH;
     pixelInfo->bitsPerPixel      = 32;
     pixelInfo->pixelType         = kIORGBDirectPixels;
     pixelInfo->componentCount    = 3;
     pixelInfo->bitsPerComponent  = 8;
-    pixelInfo->componentMasks[0] = 0x00FF0000;   // R
-    pixelInfo->componentMasks[1] = 0x0000FF00;   // G
-    pixelInfo->componentMasks[2] = 0x000000FF;   // B
+    pixelInfo->componentMasks[0] = 0x00FF0000;
+    pixelInfo->componentMasks[1] = 0x0000FF00;
+    pixelInfo->componentMasks[2] = 0x000000FF;
     strncpy(pixelInfo->pixelFormat, IO32BitDirectPixels, sizeof(pixelInfo->pixelFormat));
     return kIOReturnSuccess;
 }
 
 IOReturn HonorFB_v3::getCurrentDisplayMode(IODisplayModeID *displayMode, IOIndex *depth)
 {
-    if (displayMode) *displayMode = kHonorModeID;
-    if (depth)       *depth       = 0;
+    if (displayMode) *displayMode = currentMode;
+    if (depth)       *depth       = currentDepth;
     return kIOReturnSuccess;
+}
+
+IOReturn HonorFB_v3::setDisplayMode(IODisplayModeID displayMode, IOIndex depth)
+{
+    currentMode  = displayMode;
+    currentDepth = depth;
+    return kIOReturnSuccess;
+}
+
+IOReturn HonorFB_v3::getAttributeForConnection(IOIndex, IOSelect attribute, uintptr_t *value)
+{
+    switch (attribute) {
+        case kConnectionEnableAttribute:            // display is enabled
+        case kConnectionCheckEnable:                // ...and present
+            if (value) *value = 1;
+            return kIOReturnSuccess;
+        case kConnectionFlags:
+            if (value) *value = 0;
+            return kIOReturnSuccess;
+        case kConnectionSupportsAppleSense:
+        case kConnectionSupportsLLDDCSense:
+        case kConnectionSupportsHLDDCSense:
+            return kIOReturnUnsupported;
+        default:
+            if (value) *value = 0;
+            return kIOReturnUnsupported;
+    }
+}
+
+IOReturn HonorFB_v3::setAttributeForConnection(IOIndex, IOSelect attribute, uintptr_t)
+{
+    switch (attribute) {
+        case kConnectionPower:
+        case kConnectionProbe:
+        case kConnectionChanged:
+            return kIOReturnSuccess;
+        default:
+            return kIOReturnSuccess;   // accept everything, we are a fixed panel
+    }
+}
+
+IOReturn HonorFB_v3::connectFlags(IOIndex, IODisplayModeID displayMode, IOOptionBits *flags)
+{
+    if (!flags) return kIOReturnBadArgument;
+    *flags = (displayMode == kHonorModeID)
+             ? (kDisplayModeValidFlag | kDisplayModeSafeFlag | kDisplayModeDefaultFlag)
+             : 0;
+    return kIOReturnSuccess;
+}
+
+bool HonorFB_v3::hasDDCConnect(IOIndex) { return false; }   // fixed panel, no DDC/EDID
+
+IOReturn HonorFB_v3::getAttribute(IOSelect attribute, uintptr_t *value)
+{
+    if (attribute == kIOFBSpeedAttribute) { if (value) *value = 0; return kIOReturnSuccess; }
+    return IOFramebuffer::getAttribute(attribute, value);
+}
+
+IOReturn HonorFB_v3::setAttribute(IOSelect attribute, uintptr_t value)
+{
+    return IOFramebuffer::setAttribute(attribute, value);
 }
