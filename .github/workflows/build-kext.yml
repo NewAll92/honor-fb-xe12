@@ -19,6 +19,7 @@ jobs:
           - v0-baseline
           - v1-devicetree
           - v2-ioresources
+          - vdiag-panic
     steps:
       - name: Checkout
         uses: actions/checkout@v4
