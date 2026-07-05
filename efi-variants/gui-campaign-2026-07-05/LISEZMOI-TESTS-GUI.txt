@@ -1,0 +1,69 @@
+========================================================================
+ CAMPAGNE "DERNIERE CHANCE GUI" — Honor MagicBook X16 / macOS Sequoia
+ Préparée le 2026-07-05 (9 agents recherche + vérif adversariale)
+========================================================================
+
+LE VERDICT DE LA RECHERCHE (résumé honnête) :
+- Le compositeur logiciel de macOS s'active quand AUCUN accélérateur
+  Metal n'existe (capacité), PAS parce qu'il détecte une VM. Le spoof
+  VMM (Test A) a <10% de chances — mais il n'a jamais été tenté, donc
+  on le tente (c'est TA question, elle mérite sa réponse expérimentale).
+- DÉCOUVERTE : macOS a son PROPRE framebuffer de secours sans driver
+  (IONDRVFramebuffer + IOBootNDRV — c'est LUI qui affiche les VM sans
+  driver et les hackintosh "VESA"). Il n'a JAMAIS pu se lancer ici car
+  notre config CACHE l'iGPU (class-code=FFFFFFFF) — il ne matche plus !
+  Le Test A2 lui donne sa chance. C'est le test le plus prometteur.
+- HonorFB v3 avait 3 vrais défauts de contrat (gamma/CLUT refusés,
+  attributs de connexion écrasés). Corrigés dans v5a (Test B).
+
+CONFIGS SUR LA CLÉ (EFI/OC/) — on bascule avec swap-config.cmd
+(sur le PC : C:\Users\samym\Desktop\IGPU\usb-tools\swap-config.cmd) :
+
+  config.plist ACTUEL = config-B1-vmm.plist  <-- BOOT 1, déjà en place
+  ------------------------------------------------------------------
+  config-B1-vmm.plist       TEST A : bit hyperviseur CPUID + HonorFB v3.
+                            Attendu : logo + barre. ATTENDRE 10 MIN
+                            (écran noir 3-5 min possible AVANT le bureau).
+  config-B2-bootndrv.plist  TEST A2 : iGPU démasqué + AAPL,boot-display,
+                            HonorFB/IOGraphicsFamily OFF, -wegoff.
+                            Le fallback natif d'Apple pilote l'écran.
+                            LE PLUS PROMETTEUR. Attendre 10 min aussi.
+  config-B3-v5a.plist       TEST B : HonorFB v5a (contrat corrigé).
+  config-GUI-v3.plist       Baseline GUI connue (logo + gel à ~50%).
+  config-DEFAULT-today-headless.plist  Retour à l'état d'aujourd'hui
+                            (v4-offline headless + itlwm). RESTAURATION.
+
+ORDRE CONSEILLÉ : Boot 1 = B1 (déjà en place) -> Boot 2 = B2 -> Boot 3 = B3.
+UNE SEULE config par boot. Après la campagne : remettre DEFAULT.
+
+À CHAQUE BOOT :
+1. Brancher la clé sur le Honor, démarrer dessus (verbose activé).
+2. PATIENCE : 10 minutes minimum, MÊME écran noir. Un bureau logiciel
+   met 3 à 5 min à apparaître (documenté).
+3. Depuis le grand PC, tenter à +3 min :
+     ssh -i C:/Users/samym/.ssh/honor_vm samy@honormac.local
+   Si SSH répond, capturer (SURTOUT au boot 1) :
+     sysctl kern.hv_vmm_present          (attendu : 1 au boot B1)
+     ioreg -lw0 > /tmp/ioreg.txt         (BAR de l'iGPU -> gate du B2 :
+        l'adresse 0x4000000000 doit être DANS une plage IODeviceMemory
+        du Pci(0x2,0x0))
+     ioreg -lw0 | grep -i -e IONDRVFramebuffer -e HonorFB -e IOFramebufferUserClient
+     (au B2, le signe de succès = "IONDRVFramebuffer" présent)
+4. Photographier la dernière ligne verbose si gel.
+5. Éteindre : via SSH `sudo shutdown -h now`, sinon appui long power.
+
+INTERPRÉTATION RAPIDE :
+- Bureau visible (même ultra-lent) = GAGNÉ. Noter quelle config.
+- B1 : sysctl=1 + gel identique -> théorie VM morte, conscience libérée.
+- B2 : gel identique -> le fallback natif échoue aussi -> le mur est
+  bien dans le userspace SkyLight/Metal fermé -> le headless SSH est
+  définitivement la bonne route.
+
+SÉCURITÉ :
+- Sauvegarde complète de l'EFI d'avant-campagne :
+  C:\Users\samym\Desktop\IGPU\usb-esp-backup-2026-07-05-1942boot.zip
+- Ne JAMAIS reset la NVRAM (csr 7f0f0000 nécessaire à l'injection).
+- Le bit VMM (B1) casse la gestion d'énergie XCPM tant qu'il est actif :
+  ne JAMAIS le laisser dans la config quotidienne.
+- Retour arrière universel = swap-config.cmd option DEFAULT.
+========================================================================
