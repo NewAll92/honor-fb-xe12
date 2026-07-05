@@ -23,6 +23,7 @@ jobs:
           - vpaint-probe
           - vreset-probe
           - v3-iofb
+          - v4-offline
     steps:
       - name: Checkout
         uses: actions/checkout@v4
