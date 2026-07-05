@@ -24,6 +24,7 @@ jobs:
           - vreset-probe
           - v3-iofb
           - v4-offline
+          - v5a-contract
     steps:
       - name: Checkout
         uses: actions/checkout@v4
