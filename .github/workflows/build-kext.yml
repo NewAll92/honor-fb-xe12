@@ -16,6 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         variant:
+          - v7-contract
           - v6-vbl
           - v0-baseline
           - v1-devicetree
