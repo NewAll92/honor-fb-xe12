@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>HonorFB</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.honor.HonorFB.v8</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>HonorFB v8 PCI-attached console framebuffer</string>
+	<key>CFBundlePackageType</key>
+	<string>KEXT</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>1.0.0</string>
+	<key>OSBundleRequired</key>
+	<string>Safe Boot</string>
+	<key>IOKitPersonalities</key>
+	<dict>
+		<key>HonorFB_v8</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>com.honor.HonorFB.v8</string>
+			<key>IOClass</key>
+			<string>HonorFB_v8</string>
+			<key>IOProviderClass</key>
+			<string>IOPCIDevice</string>
+			<key>IOPCIClassMatch</key>
+			<string>0x03000000&amp;0xff000000</string>
+			<key>IOMatchCategory</key>
+			<string>HonorFB_v8</string>
+			<key>IOProbeScore</key>
+			<integer>100000</integer>
+		</dict>
+	</dict>
+	<key>OSBundleLibraries</key>
+	<dict>
+		<key>com.apple.iokit.IOGraphicsFamily</key>
+		<string>1.0.0</string>
+		<key>com.apple.iokit.IOPCIFamily</key>
+		<string>1.0.0b1</string>
+		<key>com.apple.kpi.iokit</key>
+		<string>12.0.0</string>
+		<key>com.apple.kpi.libkern</key>
+		<string>12.0.0</string>
+		<key>com.apple.kpi.mach</key>
+		<string>12.0.0</string>
+	</dict>
+</dict>
+</plist>
