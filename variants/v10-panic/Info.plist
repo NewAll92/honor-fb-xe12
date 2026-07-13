@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>HonorFB</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.honor.HonorFB.v10</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>HonorFB v10 diagnostic (panic-on-match)</string>
+	<key>CFBundlePackageType</key>
+	<string>KEXT</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>1.0.0</string>
+	<key>OSBundleRequired</key>
+	<string>Safe Boot</string>
+	<key>IOKitPersonalities</key>
+	<dict>
+		<key>HonorFB_v10</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>com.honor.HonorFB.v10</string>
+			<key>IOClass</key>
+			<string>HonorFB_v10</string>
+			<key>IOProviderClass</key>
+			<string>IOPCIDevice</string>
+			<key>IOPCIPrimaryMatch</key>
+			<string>0x46268086 0x46288086 0x462A8086 0x46808086 0x46828086 0x46888086 0x468A8086 0x468B8086 0x46908086 0x46928086 0x46938086 0x46A08086 0x46A18086 0x46A28086 0x46A38086 0x46A68086 0x46A88086 0x46AA8086 0x46B08086 0x46B18086 0x46B28086 0x46B38086 0x46C08086 0x46C18086 0x46C28086 0x46C38086 0x46D08086 0x46D18086 0x46D28086</string>
+			<key>IOMatchCategory</key>
+			<string>HonorFB_v10</string>
+			<key>IOProbeScore</key>
+			<integer>100000</integer>
+		</dict>
+	</dict>
+	<key>OSBundleLibraries</key>
+	<dict>
+		<key>com.apple.iokit.IOGraphicsFamily</key>
+		<string>1.0.0</string>
+		<key>com.apple.iokit.IOPCIFamily</key>
+		<string>1.0.0b1</string>
+		<key>com.apple.kpi.iokit</key>
+		<string>12.0.0</string>
+		<key>com.apple.kpi.libkern</key>
+		<string>12.0.0</string>
+		<key>com.apple.kpi.mach</key>
+		<string>12.0.0</string>
+		<key>com.apple.kpi.unsupported</key>
+		<string>12.0.0</string>
+	</dict>
+</dict>
+</plist>
