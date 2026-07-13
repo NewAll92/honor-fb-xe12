@@ -16,6 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         variant:
+          - v11-probe
           - v10-panic
           - v9-pciid
           - v8-pci
